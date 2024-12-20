@@ -15,14 +15,18 @@ constexpr int NP_FUNC = 2;
 constexpr int CMD_ENABLED = 0;
 constexpr int CMD_SELECTED = 1;
 
-constexpr WCHAR KEY_PYCALC[]  = L"Software\\pycalc";
+constexpr WCHAR KEY_PYCALC[] = L"Software\\pycalc";
 constexpr WCHAR KEY_ENABLED[] = L"enabled";
+
+constexpr int TIMER_PRINT = 0x02;
+constexpr int TIMER_CLOSE = 0x0F;
+constexpr int TIMER_FOCUS = 0xFF;
+
 
 NppData npp_data;
 FuncItem func_item[NP_FUNC];
 HINSTANCE h_module;
 
-UINT_PTR timer_id = -1;
 bool pycalc_enabled = false;
 unique_ptr<jthread> worker_thread = nullptr;
 
@@ -46,9 +50,7 @@ BOOL APIENTRY DllMain(HINSTANCE hmodule, DWORD reason, LPVOID) {
             func_item[CMD_SELECTED].sh_key = nullptr;
         }
         case DLL_PROCESS_DETACH: {
-            if (timer_id != -1) {
-                KillTimer(npp_data.npp_handle, timer_id);
-            }
+            KillTimer(npp_data.npp_handle, TIMER_PRINT);
         }
         default: {
             break;
@@ -62,7 +64,7 @@ extern "C" __declspec(dllexport) const TCHAR* getName() {
     return PLUGIN_NAME;
 }
 
-extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int *nbF) {
+extern "C" __declspec(dllexport) FuncItem* getFuncsArray(int* nbF) {
 
     *nbF = NP_FUNC;
     return func_item;
@@ -75,7 +77,7 @@ extern "C" __declspec(dllexport) void setInfo(NppData data) {
     worker_thread = make_unique<jthread>(Worker::process);
     worker_thread->detach();
 
-    timer_id = SetTimer(npp_data.npp_handle, 0, 50, print_result);
+    SetTimer(npp_data.npp_handle, TIMER_PRINT, 50, print_result);
 }
 
 extern "C" __declspec(dllexport) void beNotified(const SCNotification* scn) {
@@ -90,9 +92,6 @@ extern "C" __declspec(dllexport) void beNotified(const SCNotification* scn) {
 }
 
 BOOL CALLBACK ToastProc(HWND hwnd, UINT message, WPARAM w_param, LPARAM l_param) {
-
-    const int TIMER_CLOSE = 0;
-    const int TIMER_FOCUS = 1;
 
     switch (message) {
         case WM_INITDIALOG: {
@@ -142,6 +141,7 @@ BOOL CALLBACK ToastProc(HWND hwnd, UINT message, WPARAM w_param, LPARAM l_param)
         default:
             break;
     }
+
     return FALSE;
 }
 
@@ -175,10 +175,10 @@ string get_eol() {
     if (mode == SC_EOL_CRLF) {
         return "\r\n";
     }
-    if (mode ==  SC_EOL_CR) {
+    if (mode == SC_EOL_CR) {
         return "\r";
     }
-    if (mode ==  SC_EOL_LF) {
+    if (mode == SC_EOL_LF) {
         return "\n";
     }
 
@@ -215,7 +215,7 @@ bool is_press_enter(const int ch) {
         (ch == SCK_LINEFEED && mode == SC_EOL_LF);
 }
 
-void on_key_press(const SCNotification *scn) {
+void on_key_press(const SCNotification* scn) {
 
     if (!pycalc_enabled || !is_press_enter(scn->ch)) {
         return;
@@ -235,7 +235,7 @@ void on_key_press(const SCNotification *scn) {
     execute_python_code(code, false);
 }
 
-string to_utf8(const string &str) {
+string to_utf8(const string& str) {
 
     int length = MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, nullptr, 0);
     wstring wstr(length, L'\0');
@@ -248,7 +248,7 @@ string to_utf8(const string &str) {
     return ustr;
 }
 
-string to_ansi(const string &str) {
+string to_ansi(const string& str) {
 
     int length = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
     std::wstring wstr(length, L'\0');
