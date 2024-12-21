@@ -1,0 +1,52 @@
+name: CI_build
+
+on: [push, pull_request]
+
+jobs:
+  build_windows:
+
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        build_configuration: [Release]
+        build_platform: [x64, Win32]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      if: matrix.build_platform == 'x64'
+      with:
+        python-version: '3.12'
+        architecture: x64
+
+    - uses: actions/setup-python@v5
+      if: matrix.build_platform == 'ARM64'
+      with:
+        python-version: '3.12'
+        architecture: arm64
+
+    - uses: actions/setup-python@v5
+      if: matrix.build_platform == 'Win32'
+      with:
+        python-version: '3.12'
+        architecture: x86
+
+    - name: generate cmake
+      run: |
+           mkdir _build
+           cd _build
+           cmake -G "Visual Studio 17 2022" -A ${{ matrix.build_platform }} -T "v143" ..
+
+    - name: build cmake
+      run: |
+           cd _build
+           cmake --build . --config ${{ matrix.build_configuration }}
+
+    - name: Archive artifacts for ${{ matrix.build_platform }}
+      if: matrix.build_configuration == 'Release'
+      uses: actions/upload-artifact@v4
+      with:
+          name: plugin_dll_${{ matrix.build_platform }}
+          path: _build\${{ matrix.build_configuration }}\pycalc.dll
